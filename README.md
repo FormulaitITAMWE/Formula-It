@@ -1,2 +1,2 @@
 # Formula-It
-Repository for Italian Multiword Lexicon Compl-IT
+Repository for Italian Multiword Lexicon Formula-IT
