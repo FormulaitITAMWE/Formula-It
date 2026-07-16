@@ -4,6 +4,7 @@ const DATA_SOURCE = new URL(
   "./data/formulait.ttl",
   window.location.href
 ).href;
+console.log("Formula-it source:", DATA_SOURCE);
 
 const QUERY_FILES = {
   "entries": "./queries/entries.rq",
