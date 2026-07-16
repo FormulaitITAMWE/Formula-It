@@ -1,0 +1,36 @@
+PREFIX ontolex: <http://www.w3.org/ns/lemon/ontolex#>
+PREFIX frac: <http://www.w3.org/ns/lemon/frac#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX fo: <https://w3id.org/formulait/ontology/>
+
+SELECT
+  ?entry
+  ?label
+  ?attestation
+  ?surfaceForm
+  ?sentence
+  ?spanStart
+  ?spanEnd
+WHERE {
+  ?entry a ontolex:LexicalEntry ;
+         rdfs:label ?label ;
+         frac:attestation ?attestation .
+
+  ?attestation frac:quotedText ?sentence .
+
+  OPTIONAL {
+    ?attestation
+        fo:sourceSurfaceForm ?surfaceForm .
+  }
+
+  OPTIONAL {
+    ?attestation
+        fo:tokenSpanStart ?spanStart .
+  }
+
+  OPTIONAL {
+    ?attestation
+        fo:tokenSpanEnd ?spanEnd .
+  }
+}
+LIMIT 200
