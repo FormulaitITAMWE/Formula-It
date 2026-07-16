@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Formula-it SPARQL Explorer</title>
+
+  <link rel="stylesheet" href="./style.css">
+
+  <script
+    src="https://rdf.js.org/comunica-browser/versions/v4/engines/query-sparql/comunica-browser.js"
+  ></script>
+
+  <script src="./app.js" defer></script>
+</head>
+
+<body>
+  <header>
+    <h1>Formula-it SPARQL Explorer</h1>
+
+    <p>
+      Interfaccia sperimentale per interrogare il lessico
+      Formula-it in OntoLex-Lemon.
+    </p>
+
+    <p class="notice">
+      Il dataset misura circa 26 MB. La prima query può richiedere
+      alcuni secondi perché il file RDF deve essere scaricato e
+      analizzato nel browser.
+    </p>
+  </header>
+
+  <main>
+    <section class="controls">
+      <label for="query-select">
+        Query predefinita
+      </label>
+
+      <select id="query-select">
+        <option value="">
+          Seleziona una query
+        </option>
+
+        <option value="entries">
+          Elenco delle entrate
+        </option>
+
+        <option value="entry-details">
+          Dettagli di un’entrata
+        </option>
+
+        <option value="attestations">
+          Attestazioni
+        </option>
+
+        <option value="discontinuous-attestations">
+          Attestazioni discontinue
+        </option>
+
+        <option value="components">
+          Componenti delle MWE
+        </option>
+
+        <option value="missing-complit-links">
+          Componenti senza link ComPL-it
+        </option>
+
+        <option value="frequencies">
+          Frequenze per corpus
+        </option>
+      </select>
+
+      <label for="query-editor">
+        Query SPARQL
+      </label>
+
+      <textarea
+        id="query-editor"
+        spellcheck="false"
+        aria-label="Editor SPARQL"
+      ></textarea>
+
+      <div class="buttons">
+        <button id="run-query" type="button">
+          Esegui query
+        </button>
+
+        <button id="clear-query" type="button">
+          Pulisci
+        </button>
+
+        <button id="download-csv" type="button" disabled>
+          Scarica CSV
+        </button>
+      </div>
+    </section>
+
+    <section class="status-section">
+      <p id="status" aria-live="polite">
+        Seleziona una query o scrivine una nuova.
+      </p>
+    </section>
+
+    <section>
+      <div id="result-summary"></div>
+
+      <div class="table-container">
+        <table id="results-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <pre id="rdf-results" hidden></pre>
+    </section>
+  </main>
+
+  <footer>
+    <p>
+      Query eseguite localmente nel browser con Comunica.
+    </p>
+
+    <p>
+      <a href="./data/formulait.ttl">
+        Scarica formulait.ttl
+      </a>
+    </p>
+  </footer>
+</body>
+</html>
