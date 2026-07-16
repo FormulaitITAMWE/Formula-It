@@ -122,11 +122,32 @@ function termToDisplay(term) {
   return term.value;
 }
 
-function bindingToObject(binding) {
+function extractSelectVariables(query) {
+  const selectMatch = query.match(
+    /\bSELECT\s+(?:DISTINCT\s+|REDUCED\s+)?([\s\S]*?)\bWHERE\b/i
+  );
+
+  if (!selectMatch) {
+    return [];
+  }
+
+  const selectPart = selectMatch[1];
+
+  if (selectPart.trim() === "*") {
+    return [];
+  }
+
+  return [
+    ...selectPart.matchAll(/\?([A-Za-z_][A-Za-z0-9_-]*)/g),
+  ].map((match) => match[1]);
+}
+
+function bindingToObject(binding, variables) {
   const row = {};
 
-  for (const [variable, term] of binding.entries()) {
-    const name = variable.value;
+  for (const name of variables) {
+    const term = binding.get(name);
+
     row[name] = termToDisplay(term);
   }
 
@@ -186,23 +207,30 @@ function renderTable(rows) {
 }
 
 async function runSelect(query) {
-  const stream = await engine.queryBindings(query, {
+  const result = await engine.query(query, {
     sources: [DATA_SOURCE],
   });
+
+  if (result.resultType !== "bindings") {
+    throw new Error(
+      `Risultato inatteso: ${result.resultType}`
+    );
+  }
+
+  const variables = (
+    await result.metadata()
+  ).variables;
 
   const rows = [];
   let truncated = false;
 
-  for await (const binding of stream) {
-    rows.push(bindingToObject(binding));
+  for await (const binding of result.execute()) {
+    rows.push(
+      bindingToObject(binding, variables)
+    );
 
     if (rows.length >= MAX_DISPLAY_ROWS) {
       truncated = true;
-
-      if (typeof stream.destroy === "function") {
-        stream.destroy();
-      }
-
       break;
     }
   }
