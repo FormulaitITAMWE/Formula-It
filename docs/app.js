@@ -142,11 +142,49 @@ function extractSelectVariables(query) {
   ].map((match) => match[1]);
 }
 
+function normalizeVariable(variableMetadata) {
+  /*
+   * Comunica può restituire:
+   *
+   * 1. direttamente un termine RDF Variable;
+   * 2. un oggetto { variable, canBeUndef };
+   * 3. in alcune build, una stringa.
+   */
+  const variable =
+    variableMetadata?.variable ??
+    variableMetadata;
+
+  if (typeof variable === "string") {
+    return {
+      key: variable.replace(/^\?/, ""),
+      name: variable.replace(/^\?/, ""),
+    };
+  }
+
+  return {
+    key: variable,
+    name: variable?.value ?? String(variable),
+  };
+}
+
 function bindingToObject(binding, variables) {
   const row = {};
 
-  for (const name of variables) {
-    const term = binding.get(name);
+  for (const variableMetadata of variables) {
+    const { key, name } =
+      normalizeVariable(variableMetadata);
+
+    /*
+     * Il primo tentativo usa il termine RDF Variable,
+     * che è la chiave normalmente impiegata da Comunica.
+     *
+     * Gli altri tentativi servono come fallback per
+     * differenti versioni della build browser.
+     */
+    const term =
+      binding.get(key) ??
+      binding.get(name) ??
+      binding.get(`?${name}`);
 
     row[name] = termToDisplay(term);
   }
@@ -207,6 +245,8 @@ function renderTable(rows) {
 }
 
 async function runSelect(query) {
+  console.log("Sorgente RDF:", DATA_SOURCE);
+
   const result = await engine.query(query, {
     sources: [DATA_SOURCE],
   });
@@ -217,20 +257,28 @@ async function runSelect(query) {
     );
   }
 
-  const variables = (
-    await result.metadata()
-  ).variables;
+  const metadata = await result.metadata();
+  const variables = metadata.variables ?? [];
+
+  console.log("Variabili SELECT:", variables);
 
   const rows = [];
   let truncated = false;
 
-  for await (const binding of result.execute()) {
+  const stream = result.execute();
+
+  for await (const binding of stream) {
     rows.push(
       bindingToObject(binding, variables)
     );
 
     if (rows.length >= MAX_DISPLAY_ROWS) {
       truncated = true;
+
+      if (typeof stream.destroy === "function") {
+        stream.destroy();
+      }
+
       break;
     }
   }
@@ -254,21 +302,90 @@ async function runAsk(query) {
   summaryElement.textContent = "Risultato ASK.";
 }
 
+function termToRdfText(term) {
+  if (!term) {
+    return "";
+  }
+
+  if (term.termType === "NamedNode") {
+    return `<${term.value}>`;
+  }
+
+  if (term.termType === "BlankNode") {
+    return `_:${term.value}`;
+  }
+
+  if (term.termType === "Literal") {
+    const escaped = term.value
+      .replaceAll("\\", "\\\\")
+      .replaceAll('"', '\\"')
+      .replaceAll("\n", "\\n");
+
+    if (term.language) {
+      return `"${escaped}"@${term.language}`;
+    }
+
+    if (term.datatype?.value) {
+      return (
+        `"${escaped}"^^` +
+        `<${term.datatype.value}>`
+      );
+    }
+
+    return `"${escaped}"`;
+  }
+
+  return term.value;
+}
+
 function quadToText(quad) {
-  return [
-    quad.subject.value,
-    quad.predicate.value,
-    termToDisplay(quad.object),
-    quad.graph?.value || "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const graphPart =
+    quad.graph &&
+    quad.graph.termType !== "DefaultGraph"
+      ? ` ${termToRdfText(quad.graph)}`
+      : "";
+
+  return (
+    `${termToRdfText(quad.subject)} ` +
+    `${termToRdfText(quad.predicate)} ` +
+    `${termToRdfText(quad.object)}` +
+    `${graphPart} .`
+  );
 }
 
 async function runQuadQuery(query) {
   const stream = await engine.queryQuads(query, {
     sources: [DATA_SOURCE],
   });
+
+  const lines = [];
+  let truncated = false;
+
+  for await (const quad of stream) {
+    lines.push(
+      quadToText(quad)
+    );
+
+    if (lines.length >= MAX_DISPLAY_ROWS) {
+      truncated = true;
+
+      if (typeof stream.destroy === "function") {
+        stream.destroy();
+      }
+
+      break;
+    }
+  }
+
+  table.hidden = true;
+  rdfResults.hidden = false;
+
+  rdfResults.textContent = lines.join("\n");
+
+  summaryElement.textContent = truncated
+    ? `Mostrate le prime ${MAX_DISPLAY_ROWS} triple.`
+    : `${lines.length} triple restituite.`;
+}
 
   const lines = [];
   let truncated = false;
