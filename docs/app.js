@@ -40,9 +40,41 @@ const rdfResults = document.getElementById("rdf-results");
 let currentRows = [];
 let currentColumns = [];
 
+let queryTimer = null;
+let queryStartTime = null;
+
 function setStatus(message, className = "") {
   statusElement.textContent = message;
   statusElement.className = className;
+}
+function waitForRepaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(resolve);
+    });
+  });
+}
+
+function startQueryTimer() {
+  queryStartTime = performance.now();
+
+  clearInterval(queryTimer);
+
+  queryTimer = setInterval(() => {
+    const elapsed = (
+      (performance.now() - queryStartTime) /
+      1000
+    ).toFixed(1);
+
+    setStatus(
+      `Caricamento e interrogazione del dataset… ${elapsed} s`
+    );
+  }, 250);
+}
+
+function stopQueryTimer() {
+  clearInterval(queryTimer);
+  queryTimer = null;
 }
 
 function clearResults() {
@@ -166,23 +198,11 @@ function normalizeVariable(variableMetadata) {
     name: variable?.value ?? String(variable),
   };
 }
-
 function bindingToObject(binding, variables) {
   const row = {};
 
-  for (const variableMetadata of variables) {
-    const { key, name } =
-      normalizeVariable(variableMetadata);
-
-    /*
-     * Il primo tentativo usa il termine RDF Variable,
-     * che è la chiave normalmente impiegata da Comunica.
-     *
-     * Gli altri tentativi servono come fallback per
-     * differenti versioni della build browser.
-     */
+  for (const name of variables) {
     const term =
-      binding.get(key) ??
       binding.get(name) ??
       binding.get(`?${name}`);
 
@@ -247,27 +267,60 @@ function renderTable(rows) {
 async function runSelect(query) {
   console.log("Sorgente RDF:", DATA_SOURCE);
 
-  const result = await engine.query(query, {
-    sources: [DATA_SOURCE],
-  });
+  const variables = extractSelectVariables(query);
 
-  if (result.resultType !== "bindings") {
+  if (variables.length === 0) {
     throw new Error(
-      `Risultato inatteso: ${result.resultType}`
+      "Per ora usa variabili SELECT esplicite, " +
+      "per esempio SELECT ?s ?p ?o, non SELECT *."
     );
   }
 
-  const metadata = await result.metadata();
-  const variables = metadata.variables ?? [];
+  setStatus(
+    "Connessione al dataset Formula-it…"
+  );
 
-  console.log("Variabili SELECT:", variables);
+  /*
+   * Lascia al browser il tempo di mostrare il messaggio
+   * prima che inizi il parsing del Turtle.
+   */
+  await waitForRepaint();
+
+  const stream = await engine.queryBindings(
+    query,
+    {
+      sources: [
+        {
+          type: "file",
+          value: DATA_SOURCE,
+        },
+      ],
+      httpTimeout: 300000,
+      httpBodyTimeout: true,
+    }
+  );
 
   const rows = [];
   let truncated = false;
+  let firstResultReceived = false;
 
-  const stream = result.execute();
+  setStatus(
+    "Dataset raggiunto. Parsing RDF e valutazione SPARQL…"
+  );
+
+  await waitForRepaint();
 
   for await (const binding of stream) {
+    if (!firstResultReceived) {
+      firstResultReceived = true;
+
+      setStatus(
+        "Primi risultati ricevuti. Preparazione della tabella…"
+      );
+
+      await waitForRepaint();
+    }
+
     rows.push(
       bindingToObject(binding, variables)
     );
@@ -418,7 +471,10 @@ async function executeQuery() {
   const query = queryEditor.value.trim();
 
   if (!query) {
-    setStatus("Inserisci una query SPARQL.", "error");
+    setStatus(
+      "Inserisci una query SPARQL.",
+      "error"
+    );
     return;
   }
 
@@ -426,7 +482,8 @@ async function executeQuery() {
 
   if (!queryType) {
     setStatus(
-      "Tipo di query non riconosciuto. Usa SELECT, ASK, CONSTRUCT o DESCRIBE.",
+      "Tipo di query non riconosciuto. " +
+      "Usa SELECT, ASK, CONSTRUCT o DESCRIBE.",
       "error"
     );
     return;
@@ -437,11 +494,19 @@ async function executeQuery() {
   runButton.disabled = true;
   querySelect.disabled = true;
 
-  const start = performance.now();
+  const originalButtonText =
+    runButton.textContent;
 
-  setStatus(
-    "Query in esecuzione. Il primo caricamento può richiedere alcuni secondi…"
-  );
+  runButton.textContent =
+    "Query in corso…";
+
+  startQueryTimer();
+
+  /*
+   * Forza la visualizzazione dello stato e del pulsante
+   * prima dell'avvio di Comunica.
+   */
+  await waitForRepaint();
 
   try {
     if (queryType === "SELECT") {
@@ -453,7 +518,7 @@ async function executeQuery() {
     }
 
     const elapsed = (
-      (performance.now() - start) /
+      (performance.now() - queryStartTime) /
       1000
     ).toFixed(2);
 
@@ -469,8 +534,13 @@ async function executeQuery() {
       "error"
     );
   } finally {
+    stopQueryTimer();
+
     runButton.disabled = false;
     querySelect.disabled = false;
+
+    runButton.textContent =
+      originalButtonText;
   }
 }
 
