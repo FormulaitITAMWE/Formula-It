@@ -83,7 +83,7 @@ textarea {
 
   resize: vertical;
 }
-
+function csvEscape(value) {
 .buttons {
   display: flex;
   flex-wrap: wrap;
@@ -184,4 +184,28 @@ footer {
   td {
     padding: 0.45rem;
   }
+}
+
+  #status {
+  min-height: 2.5rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid #526d82;
+  background: #eaf0f5;
+  font-weight: 600;
+}
+
+#status.success {
+  border-left-color: #176b3a;
+  background: #e8f5ec;
+  color: #176b3a;
+}
+
+#status.error {
+  border-left-color: #a61b1b;
+  background: #fdecec;
+  color: #a61b1b;
+}
+
+button:disabled {
+  cursor: progress;
 }
